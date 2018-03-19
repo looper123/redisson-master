@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:redisson="http://redisson.org/schema/redisson"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://redisson.org/schema/redisson http://redisson.org/schema/redisson/redisson.xsd">
+
+
+    <redisson:client
+            id="redisson"
+            name="redisson1,redisson2"
+            threads="0"
+            netty-threads="0"
+            codec-ref="myCodec"
+            use-linux-native-epoll="false"
+            redisson-reference-enabled="true"
+            codec-provider-ref="myCodecProvider"
+            resolver-provider-ref="myResolverProvider"
+            executor-ref="myExecutor"
+            event-loop-group-ref="myEventLoopGroup"
+    >
+        <!--
+        这里的name属性和qualifier子元素不能同时使用。
+
+        id和name的属性都可以被用来作为qualifier的备选值。
+        -->
+        <!--<qualifier value="redisson3"/>-->
+        <redisson:cluster-servers
+                idle-connection-timeout="10000"
+                ping-timeout="1000"
+                connect-timeout="10000"
+                timeout="3000"
+                retry-attempts="3"
+                retry-interval="1500"
+                reconnection-timeout="3000"
+                failed-attempts="3"
+                password="do_not_use_if_it_is_not_set"
+                subscriptions-per-connection="5"
+                client-name="none"
+                load-balancer-ref="myLoadBalancer"
+                subscription-connection-minimum-idle-size="1"
+                subscription-connection-pool-size="50"
+                slave-connection-minimum-idle-size="10"
+                slave-connection-pool-size="64"
+                master-connection-minimum-idle-size="10"
+                master-connection-pool-size="64"
+                read-mode="SLAVE"
+                subscription-mode="SLAVE"
+                scan-interval="1000"
+        >
+            <redisson:node-address value="redis://127.0.0.1:6379" />
+            <redisson:node-address value="redis://127.0.0.1:6380" />
+            <redisson:node-address value="redis://127.0.0.1:6381" />
+        </redisson:cluster-servers>
+    </redisson:client>
+
+    <!-- 最基本配置 -->
+    <redisson:client>
+        <redisson:cluster-servers>
+            <redisson:node-address value="redis://127.0.0.1:6379" />
+            <redisson:node-address value="redis://127.0.0.1:6380" />
+            <redisson:node-address value="redis://127.0.0.1:6381" />
+        </redisson:cluster-servers>
+    </redisson:client>
+
+</beans>
