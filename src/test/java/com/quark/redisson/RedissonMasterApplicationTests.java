@@ -26,10 +26,12 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
@@ -434,5 +436,19 @@ public class RedissonMasterApplicationTests {
         map.put("3", "3", 1, TimeUnit.SECONDS);
     }
 
+    //多值映射 一个key 可以对应多个value
+    @Test
+    public void  multiMapTest(){
+        RSetMultimap<Object, Object> multiMap = client.getSetMultimap("sample_multiMap");
+        multiMap.put("key","multivalue_1");
+        multiMap.put("key","multivalue_2");
+        multiMap.put("key1","multivalue_3");
+        multiMap.put("key","multivalue_4");
+        RSet<Object> multiSet = multiMap.get("key");
+        List<Object> newValues = Arrays.asList("7","6", "5");
+        Set<Object> oldValues = multiMap.replaceValues("0", newValues);
+        Set<Object> removedValues = multiMap.removeAll("0");
 
+
+    }
 }
