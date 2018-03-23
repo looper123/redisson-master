@@ -865,33 +865,40 @@ public class RedissonMasterApplicationTests {
     }
 
 //    分布式实时对象中存在的'问题'
-//    产生这个现象的原因是因为Redisson没有在JVM里保存MyOtherObject对象的状态，而是在每次调用set和get的时候，
-//      先将一个实例从Redis里序列化和反序列化出来，再赋值取值。
-//    如果想让RLO和java 中的实例保持完全一致  可以把内部的实体也定义为一个REntity
     @Test
     public  void  differenceBetweenRLOAndEntity(){
         RLiveObjectService service = client.getLiveObjectService();
         DistributeEntity myObject1 = new DistributeEntity();
         myObject1.setId("123");
         myObject1 = service.<DistributeEntity>persist(myObject1);
+
+        PropertyEntity propertyEntity = new PropertyEntity();
+        propertyEntity.setId("12");
+        propertyEntity = service.<PropertyEntity>persist(propertyEntity);
 //或者取得一个已经存在的RLO实例
         DistributeEntity myObject2 = service.<DistributeEntity, String>get(DistributeEntity.class, "123");
-        myObject2.setPropertyEntity(new PropertyEntity());
+        PropertyEntity propertyEntity2 = service.<PropertyEntity, String>get(PropertyEntity.class, "12");
+        myObject2.setPropertyEntity(propertyEntity2);
 //        每次都是返回一个全新的对象引用 返回结果 false
+//    产生这个现象的原因是因为Redisson没有在JVM里保存PropertyEntity对象的状态，而是在每次调用set和get的时候，
+//      先将一个实例从Redis里序列化和反序列化出来，再赋值取值。
         System.out.println("get method result="+(myObject2.getPropertyEntity() == myObject2.getPropertyEntity()));
+        //----------------------------------------
+        //    如果想让RLO和java 中的实例保持完全一致  可以把内部的实体也定义为一个REntity
+        //   内部实体同样需要持久化到redis中  并从redis中取出 使用
         //RLO对象:
-        DistributeEntity myLiveObject = service.get(DistributeEntity.class, "1");
+        DistributeEntity myLiveObject = service.get(DistributeEntity.class, "123");
         PropertyEntity other = new PropertyEntity();
-        other.setName("ABC");
-        myLiveObject.setPropertyEntity(other);
+        propertyEntity2.setName("ABC");
+        myLiveObject.setPropertyEntity(propertyEntity2);
         System.out.println(myLiveObject.getPropertyEntity().getName());
 //输出是ABC
 
-        other.setName("BCD");
+        propertyEntity2.setName("BCD");
         System.out.println(myLiveObject.getPropertyEntity().getName());
-//还是输出ABC
+//还是输出ABC  当把PropertyEntity  实体也定义为一个RLO时  就会输出刚设置的字符 BCD
 
-        myLiveObject.setPropertyEntity(other);
+        myLiveObject.setPropertyEntity(propertyEntity2);
         System.out.println(myLiveObject.getPropertyEntity().getName());
 //现在输出是BCD
 
@@ -925,6 +932,12 @@ public class RedissonMasterApplicationTests {
         Boolean isRegistered = service.isClassRegistered(DistributeEntity.class);
     }
 
+
+//    分布式执行任务
+    @Test
+    public  void  distributeExecutingJobTest(){
+
+    }
 
 
 

@@ -6,6 +6,8 @@ import org.redisson.api.annotation.RId;
 @REntity
 public class PropertyEntity {
 
+    @RId
+    private String  id;
     private String name;
     private String mail;
 
@@ -25,4 +27,11 @@ public class PropertyEntity {
         this.mail = mail;
     }
 
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
 }
