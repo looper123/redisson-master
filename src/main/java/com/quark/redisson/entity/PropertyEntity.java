@@ -1,5 +1,9 @@
 package com.quark.redisson.entity;
 
+import org.redisson.api.annotation.REntity;
+import org.redisson.api.annotation.RId;
+
+@REntity
 public class PropertyEntity {
 
     private String name;
@@ -20,4 +24,5 @@ public class PropertyEntity {
     public void setMail(String mail) {
         this.mail = mail;
     }
+
 }

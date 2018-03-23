@@ -865,6 +865,9 @@ public class RedissonMasterApplicationTests {
     }
 
 //    分布式实时对象中存在的'问题'
+//    产生这个现象的原因是因为Redisson没有在JVM里保存MyOtherObject对象的状态，而是在每次调用set和get的时候，
+//      先将一个实例从Redis里序列化和反序列化出来，再赋值取值。
+//    如果想让RLO和java 中的实例保持完全一致  可以把内部的实体也定义为一个REntity
     @Test
     public  void  differenceBetweenRLOAndEntity(){
         RLiveObjectService service = client.getLiveObjectService();
@@ -874,9 +877,55 @@ public class RedissonMasterApplicationTests {
 //或者取得一个已经存在的RLO实例
         DistributeEntity myObject2 = service.<DistributeEntity, String>get(DistributeEntity.class, "123");
         myObject2.setPropertyEntity(new PropertyEntity());
-//        每次都是返回一个全新的对象引用
-        System.out.println(myObject2.getPropertyEntity() == myObject2.getPropertyEntity());
+//        每次都是返回一个全新的对象引用 返回结果 false
+        System.out.println("get method result="+(myObject2.getPropertyEntity() == myObject2.getPropertyEntity()));
+        //RLO对象:
+        DistributeEntity myLiveObject = service.get(DistributeEntity.class, "1");
+        PropertyEntity other = new PropertyEntity();
+        other.setName("ABC");
+        myLiveObject.setPropertyEntity(other);
+        System.out.println(myLiveObject.getPropertyEntity().getName());
+//输出是ABC
+
+        other.setName("BCD");
+        System.out.println(myLiveObject.getPropertyEntity().getName());
+//还是输出ABC
+
+        myLiveObject.setPropertyEntity(other);
+        System.out.println(myLiveObject.getPropertyEntity().getName());
+//现在输出是BCD
+
+//普通Java对象:
+        DistributeEntity myLiveObject1 = new DistributeEntity();
+        PropertyEntity other1 = new PropertyEntity();
+        other1.setName("ABC");
+        myLiveObject1.setPropertyEntity(other1);
+        System.out.println(myLiveObject1.getPropertyEntity().getName());
+//输出是ABC
+
+        other1.setName("BCD");
+        System.out.println(myLiveObject1.getPropertyEntity().getName());
+//输出已经是BCD了
+
+        myLiveObject1.setPropertyEntity(other1);
+        System.out.println(myLiveObject1.getPropertyEntity().getName());
+//输出还是BCD
     }
+
+
+//    RLO类的预处理工作
+    @Test
+    public  void RLOPreHanderTest(){
+//        提前注册RLO类
+        RLiveObjectService service = client.getLiveObjectService();
+        service.registerClass(DistributeEntity.class);
+//        取消注册
+        service.unregisterClass(DistributeEntity.class);
+//        检查注册情况
+        Boolean isRegistered = service.isClassRegistered(DistributeEntity.class);
+    }
+
+
 
 
 
