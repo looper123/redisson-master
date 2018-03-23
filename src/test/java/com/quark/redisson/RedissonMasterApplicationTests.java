@@ -1,12 +1,18 @@
 package com.quark.redisson;
 
+import com.quark.redisson.collator.WordCollator;
 import com.quark.redisson.durable.CustomerLoader;
 import com.quark.redisson.durable.CustomerWriter;
 import com.quark.redisson.entity.DistributeEntity;
 import com.quark.redisson.entity.PropertyEntity;
+import com.quark.redisson.mapper.WordCollectionMapper;
+import com.quark.redisson.mapper.WordMapper;
+import com.quark.redisson.reducer.WordReducer;
 import com.quark.redisson.remote.service.DemoService;
 import com.quark.redisson.remote.service.DemoServiceAsyn;
 import com.quark.redisson.remote.service.impl.DemoServiceImpl;
+import com.quark.redisson.task.CallableTask;
+import com.quark.redisson.task.RunnableTask;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -21,6 +27,8 @@ import org.redisson.api.map.event.EntryEvent;
 import org.redisson.api.map.event.EntryExpiredListener;
 import org.redisson.api.map.event.EntryRemovedListener;
 import org.redisson.api.map.event.EntryUpdatedListener;
+import org.redisson.api.mapreduce.RCollectionMapReduce;
+import org.redisson.api.mapreduce.RMapReduce;
 import org.redisson.config.Config;
 import org.redisson.config.TransportMode;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,6 +46,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 @RunWith(SpringRunner.class)
@@ -933,11 +944,104 @@ public class RedissonMasterApplicationTests {
     }
 
 
-//    分布式执行任务
+//    分布式执行服务  （保证服务执行的唯一性）
+//    Redisson独立节点不要求任务的类在类路径里。他们会自动被Redisson独立节点的ClassLoader加载。
+//     因此每次执行一个新任务时，不需要重启Redisson独立节点。
+//    callableTask
     @Test
-    public  void  distributeExecutingJobTest(){
-
+    public  void  callableTaskTest() throws ExecutionException, InterruptedException {
+        RExecutorService executorService = client.getExecutorService("myExecutor");
+        RExecutorFuture<Object> future = executorService.submit(new CallableTask());
+        executorService.cancelTask(future.getTaskId());
+//        取消任务
+        future.cancel(true);
+        Object result = future.get();
     }
+//  runnable task
+    @Test
+    public  void  runnableTask(){
+        RExecutorService executorService = client.getExecutorService("myExecutor");
+        executorService.submit(new RunnableTask(123));
+    }
+
+//    分布式任务调度服务 scheduler callable task
+    @Test
+    public  void callableSchedulerTaskTest() throws ExecutionException, InterruptedException {
+        RScheduledExecutorService executorService = client.getExecutorService("myExecutor");
+        ScheduledFuture<Object> future = executorService.schedule(new CallableTask(), 10, TimeUnit.MINUTES);
+
+        ScheduledFuture<Object> future1 = executorService.schedule(new CallableTask(), 10, TimeUnit.MINUTES);
+        Object result = future.get();
+    }
+//     scheduler runnable task
+    @Test
+    public  void  runnableSchdulerTaskTest(){
+        RScheduledExecutorService executorService = client.getExecutorService("myExecutor");
+//        支持cron表达式
+        ScheduledFuture<?> future1 = executorService.schedule(new RunnableTask(123), CronSchedule.of("10 0/5 * * * ?"));
+        future1.cancel(true);
+//        CronSchedule 中方法调用  == cron表达式
+        ScheduledFuture<?> future4 = executorService.schedule(new RunnableTask(123), CronSchedule.dailyAtHourAndMinute(10, 5));
+        ScheduledFuture<?> future2 = executorService.scheduleAtFixedRate(new RunnableTask(123), 10, 25, TimeUnit.HOURS);
+        ScheduledFuture<?> future3 = executorService.scheduleWithFixedDelay(new RunnableTask(123), 5, 10, TimeUnit.HOURS);
+    }
+
+
+
+//    分布式映射归纳任务 (MapReduce)
+//    处理储存在Redis环境里的大量数据的服务。所有 映射（Map） 和
+//  归纳（Reduce） 阶段中的任务都是被分配到各个独立节点（Redisson Node）里并行执行的。以下所有接口均支持映射归纳
+// （MapReduce）功能： RMap、 RMapCache、 RLocalCachedMap、 RSet、 RSetCache、 RList、 RSortedSet、 RScoredSortedSet、
+// RQueue、 RBlockingQueue、 RDeque、 RBlockingDeque、 RPriorityQueue 和 RPriorityDeque
+
+    /**
+     * RMapper、 RCollectionMapper、 RReducer 和 RCollator接口工作原理
+     * RMapper  适用于映射（Map）类，它用来把映射（Map）中的每个元素转换为另一个作为归纳（Reduce）处理用的键值对。
+     * RCollectionMapper 仅适用于集合（Collection）类型的对象，它用来把集合（Collection）中的元素转换成一组作为归纳（Reduce）处理用的键值对。
+     * RReducer 归纳器接口用来将上面这些，由映射器生成的键值对列表进行归纳整理。
+     * RCollator 收集器接口用来把归纳整理以后的结果化简为单一一个对象。
+     */
+    @Test
+//    处理 map 映射类型数据
+    public  void  MapReduceTaskTest(){
+        RMap<String, String> map = client.getMap("wordsMap");
+        map.put("line1", "Alice was beginning to get very tired");
+        map.put("line2", "of sitting by her sister on the bank and");
+        map.put("line3", "of having nothing to do once or twice she");
+        map.put("line4", "had peeped into the book her sister was reading");
+        map.put("line5", "but it had no pictures or conversations in it");
+        map.put("line6", "and what is the use of a book");
+        map.put("line7", "thought Alice without pictures or conversation");
+        RMapReduce<String, String, String, Integer> mapReduce
+                = map.<String, Integer>mapReduce()
+                .mapper(new WordMapper())
+                .reducer(new WordReducer());
+        // 统计词频
+        Map<String, Integer> mapToNumber = mapReduce.execute();
+        // 统计字数
+        Integer totalWordsAmount = mapReduce.execute(new WordCollator());
+    }
+//      处理集合collection类型数据
+    @Test
+    public  void  MapReduceCollectionTaskTest() {
+        RList<String> list = client.getList("myList");
+        list.add("Alice was beginning to get very tired");
+        list.add("of sitting by her sister on the bank and");
+        list.add("of having nothing to do once or twice she");
+        list.add("had peeped into the book her sister was reading");
+        list.add("but it had no pictures or conversations in it");
+        list.add("and what is the use of a book");
+        list.add("thought Alice without pictures or conversation");
+        RCollectionMapReduce<String, String, Integer> mapReduce
+                = list.<String, Integer>mapReduce()
+                .mapper(new WordCollectionMapper())
+                .reducer(new WordReducer());
+        // 统计词频
+        Map<String, Integer> mapToNumber = mapReduce.execute();
+        // 统计字数
+        Integer totalWordsAmount = mapReduce.execute(new WordCollator());
+    }
+
 
 
 
