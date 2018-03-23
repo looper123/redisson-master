@@ -3,6 +3,7 @@ package com.quark.redisson;
 import com.quark.redisson.durable.CustomerLoader;
 import com.quark.redisson.durable.CustomerWriter;
 import com.quark.redisson.entity.DistributeEntity;
+import com.quark.redisson.entity.PropertyEntity;
 import com.quark.redisson.remote.service.DemoService;
 import com.quark.redisson.remote.service.DemoServiceAsyn;
 import com.quark.redisson.remote.service.impl.DemoServiceImpl;
@@ -779,6 +780,7 @@ public class RedissonMasterApplicationTests {
 
 
 //    --------------------分布式服务---------------------
+//    以jvm作为服务器
     //   基于redisson的远程rpc
     //  服务端（服务提供者）
     /**
@@ -787,7 +789,7 @@ public class RedissonMasterApplicationTests {
      *  超过该数量的并发请求会在队列中等候
      */
     @Test
-    public void redissonRpcServerTest() {
+    public void redissonRpcServerTest() throws InterruptedException {
         RRemoteService remoteService = client.getRemoteService();
         DemoServiceImpl demoService = new DemoServiceImpl();
         // 在调用远程方法以前，应该首先注册远程服务
@@ -795,6 +797,8 @@ public class RedissonMasterApplicationTests {
         remoteService.register(DemoService.class, demoService);
         // 注册了12个服务端工作者实例，可以同时执行12个并发调用
         remoteService.register(DemoService.class, demoService, 12);
+//        不让服务停止
+        Thread.sleep(500000000l);
     }
 
     //    客户端  （服务消费者）
@@ -841,6 +845,7 @@ public class RedissonMasterApplicationTests {
         rFuture.cancel(true);
     }
 
+
 //      分布式实时对象  可以同时被多个位于不同jvm的线程引用
 //    成的代理类（Proxy），将一个指定的普通Java类里的所有字段，以及针对这些字段的操作全部映射到一个Redis Hash的数据结构，
 //    实现这种理念。每个字段的get和set方法最终被转译为针对同一个Redis Hash的hget和hset命令，
@@ -850,10 +855,29 @@ public class RedissonMasterApplicationTests {
 //        放入一个RLO实例
         RLiveObjectService service = client.getLiveObjectService();
         DistributeEntity myObject1 = new DistributeEntity();
+        myObject1.setId("123");
         myObject1.setName("myName");
         myObject1 = service.<DistributeEntity>persist(myObject1);
 //或者取得一个已经存在的RLO实例
-        DistributeEntity myObject2 = service.<DistributeEntity, String>get(DistributeEntity.class, "myName");
+        DistributeEntity myObject2 = service.<DistributeEntity, String>get(DistributeEntity.class, "123");
+        System.out.println(myObject2.getId());
+        System.out.println(myObject2.getName());
     }
+
+//    分布式实时对象中存在的'问题'
+    @Test
+    public  void  differenceBetweenRLOAndEntity(){
+        RLiveObjectService service = client.getLiveObjectService();
+        DistributeEntity myObject1 = new DistributeEntity();
+        myObject1.setId("123");
+        myObject1 = service.<DistributeEntity>persist(myObject1);
+//或者取得一个已经存在的RLO实例
+        DistributeEntity myObject2 = service.<DistributeEntity, String>get(DistributeEntity.class, "123");
+        myObject2.setPropertyEntity(new PropertyEntity());
+//        每次都是返回一个全新的对象引用
+        System.out.println(myObject2.getPropertyEntity() == myObject2.getPropertyEntity());
+    }
+
+
 
 }
