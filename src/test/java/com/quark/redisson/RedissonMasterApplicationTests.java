@@ -2,6 +2,7 @@ package com.quark.redisson;
 
 import com.quark.redisson.durable.CustomerLoader;
 import com.quark.redisson.durable.CustomerWriter;
+import com.quark.redisson.entity.DistributeEntity;
 import com.quark.redisson.remote.service.DemoService;
 import com.quark.redisson.remote.service.DemoServiceAsyn;
 import com.quark.redisson.remote.service.impl.DemoServiceImpl;
@@ -840,6 +841,19 @@ public class RedissonMasterApplicationTests {
         rFuture.cancel(true);
     }
 
-
+//      分布式实时对象  可以同时被多个位于不同jvm的线程引用
+//    成的代理类（Proxy），将一个指定的普通Java类里的所有字段，以及针对这些字段的操作全部映射到一个Redis Hash的数据结构，
+//    实现这种理念。每个字段的get和set方法最终被转译为针对同一个Redis Hash的hget和hset命令，
+//    从而使所有连接到同一个Redis节点的所有可以客户端同时对一个指定的对象进行操作
+    @Test
+    public  void  distributeRealTimeObjectTest(){
+//        放入一个RLO实例
+        RLiveObjectService service = client.getLiveObjectService();
+        DistributeEntity myObject1 = new DistributeEntity();
+        myObject1.setName("myName");
+        myObject1 = service.<DistributeEntity>persist(myObject1);
+//或者取得一个已经存在的RLO实例
+        DistributeEntity myObject2 = service.<DistributeEntity, String>get(DistributeEntity.class, "myName");
+    }
 
 }
