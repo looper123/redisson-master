@@ -5,6 +5,8 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.redisson.Redisson;
+import org.redisson.RedissonMultiLock;
+import org.redisson.RedissonRedLock;
 import org.redisson.api.*;
 import org.redisson.api.listener.MessageListener;
 import org.redisson.api.map.MapLoader;
@@ -27,6 +29,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -44,6 +47,8 @@ public class RedissonMasterApplicationTests {
     private Config config;
 
     private RedissonClient client;
+    private RedissonClient client2;
+    private RedissonClient client3;
 
     @Rule
     public OutputCapture outputCapture = new OutputCapture();
@@ -66,6 +71,8 @@ public class RedissonMasterApplicationTests {
                 .setAddress("redis://192.168.194.130:6379");
         this.config = config;
         this.client = Redisson.create(config);
+        this.client2 = Redisson.create(config);
+        this.client3 = Redisson.create(config);
     }
 
 
@@ -436,19 +443,352 @@ public class RedissonMasterApplicationTests {
         map.put("3", "3", 1, TimeUnit.SECONDS);
     }
 
-    //多值映射 一个key 可以对应多个value
+    // 基于set的多值映射 & 淘汰机制
     @Test
-    public void  multiMapTest(){
-        RSetMultimap<Object, Object> multiMap = client.getSetMultimap("sample_multiMap");
-        multiMap.put("key","multivalue_1");
-        multiMap.put("key","multivalue_2");
-        multiMap.put("key1","multivalue_3");
-        multiMap.put("key","multivalue_4");
-        RSet<Object> multiSet = multiMap.get("key");
-        List<Object> newValues = Arrays.asList("7","6", "5");
-        Set<Object> oldValues = multiMap.replaceValues("0", newValues);
-        Set<Object> removedValues = multiMap.removeAll("0");
-
+    public void multiMapTest() {
+        RSetMultimap<String, String> setMultiMap = client.getSetMultimap("sample_set_multiMap");
+        setMultiMap.put("key", "multivalue_1");
+        setMultiMap.put("key", "multivalue_2");
+        setMultiMap.put("key1", "multivalue_3");
+        setMultiMap.put("key1", "multivalue_4");
+        RSet<String> multiSet = setMultiMap.get("key");
+        List<String> newValues = Arrays.asList("7", "6", "5");
+        Set<String> oldValues = setMultiMap.replaceValues("0", newValues);
+        Set<String> removedValues = setMultiMap.removeAll("0");
+//        set中的淘汰机制： redis本身暂不支持set中元素淘汰，因此所有的元素都是通过org.redisson.EvictionScheduler实例来
+//         实现定期清理。而且当下次清理的数据量比上次少时，清理时间间隔也会随之边长。
+        RSetMultimapCache<String, String> setMultimapCache = client.getSetMultimapCache("sample_set_multiMap");
+        setMultimapCache.expireKey("key", 10, TimeUnit.SECONDS);
 
     }
+
+    //    基于列表的多值映射
+    @Test
+    public void listMultiMapTest() {
+        RListMultimap<String, String> listMultiMap = client.getListMultimap("sample_list_multiMap");
+        listMultiMap.put("key", "multivalue_1");
+        listMultiMap.put("key", "multivalue_2");
+        listMultiMap.put("key1", "multivalue_3");
+        listMultiMap.put("key1", "multivalue_4");
+        RList<String> valueList = listMultiMap.get("key");
+        Collection<String> newValues = Arrays.asList("7", "6", "5");
+        List<String> oldValues = listMultiMap.replaceValues("0", newValues);
+        List<String> removedValues = listMultiMap.removeAll("0");
+    }
+
+    //   有序集合sortset
+    public void sortSetTest() {
+        RSortedSet<Object> sortSet = client.getSortedSet("sample_sort_set");
+//            sortSet.trySetComparator(new MyComparator()); // 配置自定义元素比较器
+        sortSet.add(3);
+        sortSet.add(1);
+        sortSet.add(2);
+        sortSet.removeAsync(0);
+        sortSet.addAsync(5);
+    }
+
+    //    计分排序集
+    public void scoreSortSetTest() {
+        RScoredSortedSet<String> set = client.getScoredSortedSet("simple_score_sortSet");
+        set.add(0.13, "afdaf");
+        set.addAsync(0.251, "gahhga");
+        set.add(0.302, "yywsaag");
+        set.pollFirst();
+        set.pollLast();
+        int index = set.rank("afdaf"); // 获取元素在集合中的位置
+        Double score = set.getScore("afdaf"); // 获取元素的评分
+    }
+
+
+//    字典排序集  把所有的字符串元素按照字典顺序排列
+    public  void lexSortedSetTest(){
+        RLexSortedSet set = client.getLexSortedSet("simple_lex_sortSet");
+        set.add("d");
+        set.addAsync("e");
+        set.add("f");
+        set.rangeTail("d", false);
+        set.countHead("e",false);
+        set.range("d", true, "z", false);
+    }
+
+//    列表list
+    public void listTest(){
+        RList<Object> list = client.getList("sample_list");
+        list.add("a");
+        list.add("b");
+        list.readAll();
+    }
+
+//   队列
+    public  void queueTest(){
+        RQueue<Object> queue = client.getQueue("sample_queue");
+        queue.add("this is a queue");
+        Object poll = queue.poll();
+        Object peek = queue.peek();
+    }
+
+
+//    双端队列
+    public  void dequeTest() throws InterruptedException {
+        RBlockingQueue<String> queue = client.getBlockingQueue("deque");
+        queue.offer("");
+        String obj = queue.peek();
+        String someObj = queue.poll();
+        String ob = queue.poll(10, TimeUnit.SECONDS);
+    }
+
+//    分布式无界阻塞队列
+    public void blockQueueTest() throws InterruptedException {
+        RBlockingDeque<Object> blockQueue = client.getBlockingDeque("sample_block_queue");
+        blockQueue.offer("clockQueue");
+        Object obj = blockQueue.peek();
+        Object someObj = blockQueue.poll();
+        Object ob = blockQueue.poll(10, TimeUnit.SECONDS);
+    }
+
+//    有界阻塞队列
+    @Test
+    public void BoundedBlockQueueTest() throws InterruptedException {
+        RBoundedBlockingQueue<Object> queue = client.getBoundedBlockingQueue("sample_bounded_block_queue");
+// 如果初始容量（边界）设定成功则返回`真（true）`，
+// 如果初始容量（边界）已近存在则返回`假（false）`。
+        queue.trySetCapacity(2);
+        queue.offer("1");
+        queue.offer("2");
+// 此时容量已满，下面代码将会被阻塞，直到有空闲为止。
+        queue.put("3");
+        Object obj = queue.peek();
+        Object someObj = queue.poll();
+        Object ob = queue.poll(10, TimeUnit.MINUTES);
+    }
+
+
+//    阻塞双端队列
+    @Test
+    public void blockDequeTest() throws InterruptedException {
+        RBlockingDeque<Object> blockDeque = client.getBlockingDeque("sample_block_deque");
+        blockDeque.putFirst(1);
+        blockDeque.putLast(2);
+        Object firstValue = blockDeque.takeFirst();
+        Object lastValue = blockDeque.takeLast();
+        blockDeque.pollFirst(10, TimeUnit.SECONDS);
+        blockDeque.pollLast(3, TimeUnit.SECONDS);
+    }
+
+//  延迟队列  向队列按要求延迟添加项目
+    @Test
+    public void  delayQueueTest(){
+//        定义一个标准queue
+        RQueue<String> distinationQueue =client.getQueue("sample_queue");
+//        由标准queue生成一个延迟queue
+        RDelayedQueue<String> delayedQueue = client.getDelayedQueue(distinationQueue);
+// 10秒钟以后将消息发送到指定队列
+        delayedQueue.offer("msg1", 10, TimeUnit.SECONDS);
+// 一分钟以后将消息发送到指定队列
+        delayedQueue.offer("msg2", 1, TimeUnit.MINUTES);
+    }
+
+//    优先队列
+    @Test
+    public void priorityQueueTest(){
+        RPriorityQueue<Integer> queue = client.getPriorityQueue("sample_priority_queue");
+//        通过比较器（Comparator）接口来对元素排序
+//        queue.trySetComparator(new MyComparator()); // 指定对象比较器
+        queue.add(3);
+        queue.add(1);
+        queue.add(2);
+        queue.remove(0);
+        queue.add(5);
+        queue.poll();
+    }
+
+
+//    优先双端队列
+    @Test
+    public void priorityDequeTest(){
+        RPriorityDeque<Integer> queue = client.getPriorityDeque("sample_priority_queue");
+//        可以通过Comparator接口对元素排序
+//        queue.trySetComparator(new MyComparator()); // 指定对象比较器
+        queue.addLast(3);
+        queue.addFirst(1);
+        queue.add(2);
+        queue.remove(0);
+        queue.add(5);
+        queue.pollFirst();
+        queue.pollLast();
+    }
+
+
+//    优先阻塞队列
+    @Test
+    public  void  priorityBlockQueueTest() throws InterruptedException {
+        RPriorityBlockingQueue<Integer> queue = client.getPriorityBlockingQueue("sample_priority_block_queue");
+//        queue.trySetComparator(new MyComparator()); // 指定对象比较器
+        queue.add(3);
+        queue.add(1);
+        queue.add(2);
+        queue.removeAsync(0);
+        queue.addAsync(5);
+        queue.take();
+    }
+
+//    优先双端阻塞队列
+    @Test
+    public  void  priorityBlockDequeTest() throws InterruptedException {
+        RPriorityBlockingDeque<Integer> queue = client.getPriorityBlockingDeque("sample_priority_block_deque");
+//        queue.trySetComparator(new MyComparator()); // 指定对象比较器
+        queue.add(2);
+        queue.removeAsync(0);
+        queue.addAsync(5);
+        queue.pollFirst();
+        queue.pollLast();
+        queue.takeFirst();
+        queue.takeLast();
+    }
+
+
+//  ------------------- redisson中的分布式锁和同步器---------------------
+//    在lock.lock()  即加锁后  如果保存锁的redis 宕机了 就会出现锁死的情况 为了避免这种情况 redisson专门提供了一个监控锁的看门狗
+//        它的作用是在Redisson实例被关闭前，不断的延长锁的有效期。默认情况下，看门狗的检查锁的超时时间是30秒钟，
+//         也可以通过修改Config.lockWatchdogTimeout来另行指定。
+
+//    可重入锁
+    @Test
+    public  void  RlockTest() throws InterruptedException {
+//        获取锁
+        RLock rLock = client.getLock("R_lock");
+//        加锁
+
+        // 加锁以后10秒钟自动解锁
+        // 无需调用unlock方法手动解锁
+        rLock.lock(10, TimeUnit.SECONDS);
+        // 尝试加锁，最多等待100秒，上锁以后10秒自动解锁
+        boolean res = rLock.tryLock(100, 10, TimeUnit.SECONDS);
+        rLock.unlock();
+    }
+
+//    公平锁  当有多个redisson客户端同时请求时 优先把锁分配给先发送请求的线程
+    @Test
+    public  void FairLockTest() throws InterruptedException {
+        RLock lock = client.getLock("fair_lock");
+// 最常见的使用方法
+        lock.lock();
+        // 加锁以后10秒钟自动解锁
+// 无需调用unlock方法手动解锁
+        lock.lock(10, TimeUnit.SECONDS);
+
+// 尝试加锁，最多等待100秒，上锁以后10秒自动解锁
+        boolean res = lock.tryLock(100, 10, TimeUnit.SECONDS);
+    }
+
+
+//    联锁  把多个Rlock对象关联为一个联锁，每一个rlock对象可以来自不同的redisson实例
+    @Test
+    public  void  multiLockTest(){
+        RLock lock1 = client.getLock("lock1");
+        RLock lock2 = client2.getLock("lock2");
+        RLock lock3 = client3.getLock("lock3");
+        RedissonMultiLock lock = new RedissonMultiLock(lock1, lock2, lock3);
+// 同时加锁：lock1 lock2 lock3
+// 所有的锁都上锁成功才算成功。
+        lock.lock();
+        lock.unlock();
+    }
+
+//    redlock  红锁的实现机制：
+//    就是采用N（通常是5）个独立的redis节点，同时setnx，如果多数节点成功，就拿到了锁，这样就可以允许少数（2）个节点挂掉了。
+//    整个取锁、释放锁的操作和单节点类似，当成功获取到锁的数量大于一半时 就认为锁获取成功了
+    @Test
+    public  void  reLockTest() throws InterruptedException {
+        RLock lock1 = client.getLock("lock1");
+        RLock lock2 = client2.getLock("lock2");
+        RLock lock3 = client3.getLock("lock3");
+        RedissonRedLock lock = new RedissonRedLock(lock1, lock2, lock3);
+// 同时加锁：lock1 lock2 lock3
+// 红锁在大部分节点上加锁成功就算成功。
+//        lock.lock();
+        lock.lock(10, TimeUnit.SECONDS);
+        lock.unlock();
+        // 给lock1，lock2，lock3加锁，如果没有手动解开的话，10秒钟后将会自动解开
+// 为加锁等待100秒时间，并在加锁成功10秒钟后自动解开
+        boolean res = lock.tryLock(100, 10, TimeUnit.SECONDS);
+        lock.unlock();
+    }
+
+//    读写锁
+    @Test
+    public  void wrLockTest() throws InterruptedException {
+        RReadWriteLock rwlock = client.getReadWriteLock("sample_rw_lock");
+// 最常见的使用方法
+        rwlock.readLock().lock();
+// 或
+        rwlock.writeLock().lock();
+        // 10秒钟以后自动解锁
+// 无需调用unlock方法手动解锁
+        rwlock.readLock().lock(10, TimeUnit.SECONDS);
+// 或
+        rwlock.writeLock().lock(10, TimeUnit.SECONDS);
+// 尝试加锁，最多等待100秒，上锁以后10秒自动解锁
+        boolean resWLock = rwlock.readLock().tryLock(100, 10, TimeUnit.SECONDS);
+// 或
+        boolean resRLock = rwlock.writeLock().tryLock(100, 10, TimeUnit.SECONDS);
+        rwlock.readLock().unlock();
+        rwlock.writeLock().unlock();
+    }
+
+//    分布式信号量   （用来限制某个物理、逻辑资源的访问数量）
+    @Test
+    public  void  semaphore() throws InterruptedException {
+        RSemaphore semaphore = client.getSemaphore("sample_semaphore");
+        semaphore.acquire();
+//或
+        semaphore.acquireAsync();
+        semaphore.acquire(23);
+        semaphore.tryAcquire();
+//或
+        semaphore.tryAcquireAsync();
+        semaphore.tryAcquire(23, TimeUnit.SECONDS);
+//或
+        semaphore.tryAcquireAsync(23, TimeUnit.SECONDS);
+        semaphore.release(10);
+        semaphore.release();
+//或
+        semaphore.releaseAsync();
+    }
+
+//    可过期信号量
+    @Test
+    public  void  permitExpirableSemaphoreTest() throws InterruptedException {
+        RPermitExpirableSemaphore semaphore = client.getPermitExpirableSemaphore("sample_expire_semaphore");
+//        String permitId = semaphore.acquire();
+// 获取一个信号，有效期只有2秒钟。
+        String  permitId= semaphore.acquire(2, TimeUnit.SECONDS);
+        semaphore.release(permitId);
+    }
+
+//     分布式闭锁   允许一个或者多个线程等待一件事情的发生
+    @Test
+    public  void  countDownLatchTest() throws InterruptedException {
+//        当前线程
+        RCountDownLatch latch = client.getCountDownLatch("anyCountDownLatch");
+        latch.trySetCount(1);
+        latch.await();
+// 在其他线程或其他JVM里
+        RCountDownLatch latch_down = client.getCountDownLatch("anyCountDownLatch");
+        latch_down.countDown();
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }
