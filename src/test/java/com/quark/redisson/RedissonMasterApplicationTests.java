@@ -1,5 +1,10 @@
 package com.quark.redisson;
 
+import com.quark.redisson.durable.CustomerLoader;
+import com.quark.redisson.durable.CustomerWriter;
+import com.quark.redisson.remote.service.DemoService;
+import com.quark.redisson.remote.service.DemoServiceAsyn;
+import com.quark.redisson.remote.service.impl.DemoServiceImpl;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -9,8 +14,6 @@ import org.redisson.RedissonMultiLock;
 import org.redisson.RedissonRedLock;
 import org.redisson.api.*;
 import org.redisson.api.listener.MessageListener;
-import org.redisson.api.map.MapLoader;
-import org.redisson.api.map.MapWriter;
 import org.redisson.api.map.event.EntryCreatedListener;
 import org.redisson.api.map.event.EntryEvent;
 import org.redisson.api.map.event.EntryExpiredListener;
@@ -18,12 +21,10 @@ import org.redisson.api.map.event.EntryRemovedListener;
 import org.redisson.api.map.event.EntryUpdatedListener;
 import org.redisson.config.Config;
 import org.redisson.config.TransportMode;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.rule.OutputCapture;
 import org.springframework.test.context.junit4.SpringRunner;
 
-import javax.accessibility.AccessibleStateSet;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,9 +36,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.TimeUnit;
 
 @RunWith(SpringRunner.class)
@@ -500,27 +498,27 @@ public class RedissonMasterApplicationTests {
     }
 
 
-//    字典排序集  把所有的字符串元素按照字典顺序排列
-    public  void lexSortedSetTest(){
+    //    字典排序集  把所有的字符串元素按照字典顺序排列
+    public void lexSortedSetTest() {
         RLexSortedSet set = client.getLexSortedSet("simple_lex_sortSet");
         set.add("d");
         set.addAsync("e");
         set.add("f");
         set.rangeTail("d", false);
-        set.countHead("e",false);
+        set.countHead("e", false);
         set.range("d", true, "z", false);
     }
 
-//    列表list
-    public void listTest(){
+    //    列表list
+    public void listTest() {
         RList<Object> list = client.getList("sample_list");
         list.add("a");
         list.add("b");
         list.readAll();
     }
 
-//   队列
-    public  void queueTest(){
+    //   队列
+    public void queueTest() {
         RQueue<Object> queue = client.getQueue("sample_queue");
         queue.add("this is a queue");
         Object poll = queue.poll();
@@ -528,8 +526,8 @@ public class RedissonMasterApplicationTests {
     }
 
 
-//    双端队列
-    public  void dequeTest() throws InterruptedException {
+    //    双端队列
+    public void dequeTest() throws InterruptedException {
         RBlockingQueue<String> queue = client.getBlockingQueue("deque");
         queue.offer("");
         String obj = queue.peek();
@@ -537,7 +535,7 @@ public class RedissonMasterApplicationTests {
         String ob = queue.poll(10, TimeUnit.SECONDS);
     }
 
-//    分布式无界阻塞队列
+    //    分布式无界阻塞队列
     public void blockQueueTest() throws InterruptedException {
         RBlockingDeque<Object> blockQueue = client.getBlockingDeque("sample_block_queue");
         blockQueue.offer("clockQueue");
@@ -546,7 +544,7 @@ public class RedissonMasterApplicationTests {
         Object ob = blockQueue.poll(10, TimeUnit.SECONDS);
     }
 
-//    有界阻塞队列
+    //    有界阻塞队列
     @Test
     public void BoundedBlockQueueTest() throws InterruptedException {
         RBoundedBlockingQueue<Object> queue = client.getBoundedBlockingQueue("sample_bounded_block_queue");
@@ -563,7 +561,7 @@ public class RedissonMasterApplicationTests {
     }
 
 
-//    阻塞双端队列
+    //    阻塞双端队列
     @Test
     public void blockDequeTest() throws InterruptedException {
         RBlockingDeque<Object> blockDeque = client.getBlockingDeque("sample_block_deque");
@@ -575,11 +573,11 @@ public class RedissonMasterApplicationTests {
         blockDeque.pollLast(3, TimeUnit.SECONDS);
     }
 
-//  延迟队列  向队列按要求延迟添加项目
+    //  延迟队列  向队列按要求延迟添加项目
     @Test
-    public void  delayQueueTest(){
+    public void delayQueueTest() {
 //        定义一个标准queue
-        RQueue<String> distinationQueue =client.getQueue("sample_queue");
+        RQueue<String> distinationQueue = client.getQueue("sample_queue");
 //        由标准queue生成一个延迟queue
         RDelayedQueue<String> delayedQueue = client.getDelayedQueue(distinationQueue);
 // 10秒钟以后将消息发送到指定队列
@@ -588,9 +586,9 @@ public class RedissonMasterApplicationTests {
         delayedQueue.offer("msg2", 1, TimeUnit.MINUTES);
     }
 
-//    优先队列
+    //    优先队列
     @Test
-    public void priorityQueueTest(){
+    public void priorityQueueTest() {
         RPriorityQueue<Integer> queue = client.getPriorityQueue("sample_priority_queue");
 //        通过比较器（Comparator）接口来对元素排序
 //        queue.trySetComparator(new MyComparator()); // 指定对象比较器
@@ -603,9 +601,9 @@ public class RedissonMasterApplicationTests {
     }
 
 
-//    优先双端队列
+    //    优先双端队列
     @Test
-    public void priorityDequeTest(){
+    public void priorityDequeTest() {
         RPriorityDeque<Integer> queue = client.getPriorityDeque("sample_priority_queue");
 //        可以通过Comparator接口对元素排序
 //        queue.trySetComparator(new MyComparator()); // 指定对象比较器
@@ -619,9 +617,9 @@ public class RedissonMasterApplicationTests {
     }
 
 
-//    优先阻塞队列
+    //    优先阻塞队列
     @Test
-    public  void  priorityBlockQueueTest() throws InterruptedException {
+    public void priorityBlockQueueTest() throws InterruptedException {
         RPriorityBlockingQueue<Integer> queue = client.getPriorityBlockingQueue("sample_priority_block_queue");
 //        queue.trySetComparator(new MyComparator()); // 指定对象比较器
         queue.add(3);
@@ -632,9 +630,9 @@ public class RedissonMasterApplicationTests {
         queue.take();
     }
 
-//    优先双端阻塞队列
+    //    优先双端阻塞队列
     @Test
-    public  void  priorityBlockDequeTest() throws InterruptedException {
+    public void priorityBlockDequeTest() throws InterruptedException {
         RPriorityBlockingDeque<Integer> queue = client.getPriorityBlockingDeque("sample_priority_block_deque");
 //        queue.trySetComparator(new MyComparator()); // 指定对象比较器
         queue.add(2);
@@ -652,9 +650,9 @@ public class RedissonMasterApplicationTests {
 //        它的作用是在Redisson实例被关闭前，不断的延长锁的有效期。默认情况下，看门狗的检查锁的超时时间是30秒钟，
 //         也可以通过修改Config.lockWatchdogTimeout来另行指定。
 
-//    可重入锁
+    //    可重入锁
     @Test
-    public  void  RlockTest() throws InterruptedException {
+    public void RlockTest() throws InterruptedException {
 //        获取锁
         RLock rLock = client.getLock("R_lock");
 //        加锁
@@ -667,9 +665,9 @@ public class RedissonMasterApplicationTests {
         rLock.unlock();
     }
 
-//    公平锁  当有多个redisson客户端同时请求时 优先把锁分配给先发送请求的线程
+    //    公平锁  当有多个redisson客户端同时请求时 优先把锁分配给先发送请求的线程
     @Test
-    public  void FairLockTest() throws InterruptedException {
+    public void FairLockTest() throws InterruptedException {
         RLock lock = client.getLock("fair_lock");
 // 最常见的使用方法
         lock.lock();
@@ -682,9 +680,9 @@ public class RedissonMasterApplicationTests {
     }
 
 
-//    联锁  把多个Rlock对象关联为一个联锁，每一个rlock对象可以来自不同的redisson实例
+    //    联锁  把多个Rlock对象关联为一个联锁，每一个rlock对象可以来自不同的redisson实例
     @Test
-    public  void  multiLockTest(){
+    public void multiLockTest() {
         RLock lock1 = client.getLock("lock1");
         RLock lock2 = client2.getLock("lock2");
         RLock lock3 = client3.getLock("lock3");
@@ -695,11 +693,11 @@ public class RedissonMasterApplicationTests {
         lock.unlock();
     }
 
-//    redlock  红锁的实现机制：
+    //    redlock  红锁的实现机制：
 //    就是采用N（通常是5）个独立的redis节点，同时setnx，如果多数节点成功，就拿到了锁，这样就可以允许少数（2）个节点挂掉了。
 //    整个取锁、释放锁的操作和单节点类似，当成功获取到锁的数量大于一半时 就认为锁获取成功了
     @Test
-    public  void  reLockTest() throws InterruptedException {
+    public void reLockTest() throws InterruptedException {
         RLock lock1 = client.getLock("lock1");
         RLock lock2 = client2.getLock("lock2");
         RLock lock3 = client3.getLock("lock3");
@@ -715,9 +713,9 @@ public class RedissonMasterApplicationTests {
         lock.unlock();
     }
 
-//    读写锁
+    //    读写锁
     @Test
-    public  void wrLockTest() throws InterruptedException {
+    public void wrLockTest() throws InterruptedException {
         RReadWriteLock rwlock = client.getReadWriteLock("sample_rw_lock");
 // 最常见的使用方法
         rwlock.readLock().lock();
@@ -736,9 +734,9 @@ public class RedissonMasterApplicationTests {
         rwlock.writeLock().unlock();
     }
 
-//    分布式信号量   （用来限制某个物理、逻辑资源的访问数量）
+    //    分布式信号量   （用来限制某个物理、逻辑资源的访问数量）
     @Test
-    public  void  semaphore() throws InterruptedException {
+    public void semaphore() throws InterruptedException {
         RSemaphore semaphore = client.getSemaphore("sample_semaphore");
         semaphore.acquire();
 //或
@@ -756,19 +754,19 @@ public class RedissonMasterApplicationTests {
         semaphore.releaseAsync();
     }
 
-//    可过期信号量
+    //    可过期信号量
     @Test
-    public  void  permitExpirableSemaphoreTest() throws InterruptedException {
+    public void permitExpirableSemaphoreTest() throws InterruptedException {
         RPermitExpirableSemaphore semaphore = client.getPermitExpirableSemaphore("sample_expire_semaphore");
 //        String permitId = semaphore.acquire();
 // 获取一个信号，有效期只有2秒钟。
-        String  permitId= semaphore.acquire(2, TimeUnit.SECONDS);
+        String permitId = semaphore.acquire(2, TimeUnit.SECONDS);
         semaphore.release(permitId);
     }
 
-//     分布式闭锁   允许一个或者多个线程等待一件事情的发生
+    //     分布式闭锁   允许一个或者多个线程等待一件事情的发生
     @Test
-    public  void  countDownLatchTest() throws InterruptedException {
+    public void countDownLatchTest() throws InterruptedException {
 //        当前线程
         RCountDownLatch latch = client.getCountDownLatch("anyCountDownLatch");
         latch.trySetCount(1);
@@ -779,15 +777,68 @@ public class RedissonMasterApplicationTests {
     }
 
 
+//    --------------------分布式服务---------------------
+    //   基于redisson的远程rpc
+    //  服务端（服务提供者）
+    /**
+     *  当服务端工作者可用实例 > 1 时，会并行执行被调用的方法
+     * 并行执行的工作者数量  =  redissson 服务端的数量 *  服务端注册服务时指定的当前服务端的工作者实例
+     *  超过该数量的并发请求会在队列中等候
+     */
+    @Test
+    public void redissonRpcServerTest() {
+        RRemoteService remoteService = client.getRemoteService();
+        DemoServiceImpl demoService = new DemoServiceImpl();
+        // 在调用远程方法以前，应该首先注册远程服务
+        // 只注册了一个服务端工作者实例，只能同时执行一个并发调用
+        remoteService.register(DemoService.class, demoService);
+        // 注册了12个服务端工作者实例，可以同时执行12个并发调用
+        remoteService.register(DemoService.class, demoService, 12);
+    }
+
+    //    客户端  （服务消费者）
+    @Test
+    public void redissonRpcProviderTest() {
+        RRemoteService remoteService = client.getRemoteService();
+        //获取服务
+        DemoService demoService = remoteService.get(DemoService.class);
+        //调用
+        demoService.invoke();
+    }
 
 
+//    发送即不管（Fire-and-Forget）模式和应答回执（Ack-Response）模式
+    @Test
+    public void  differentModelTest(){
+        // 应答回执超时1秒钟，远程执行超时30秒钟
+        RemoteInvocationOptions options = RemoteInvocationOptions.defaults();
+
+// 无需应答回执，远程执行超时30秒钟
+        RemoteInvocationOptions options1 = RemoteInvocationOptions.defaults().noAck();
+
+// 应答回执超时1秒钟，不等待执行结果
+        RemoteInvocationOptions options2 = RemoteInvocationOptions.defaults().noResult();
+
+// 应答回执超时1分钟，不等待执行结果
+        RemoteInvocationOptions options3 = RemoteInvocationOptions.defaults().expectAckWithin(1, TimeUnit.MINUTES).noResult();
+
+// 发送即不管（Fire-and-Forget）模式，无需应答回执，不等待结果
+        RemoteInvocationOptions options4 = RemoteInvocationOptions.defaults().noAck().noResult();
+
+        RRemoteService remoteService = client.getRemoteService();
+        DemoService service = remoteService.get(DemoService.class, options);
+    }
 
 
-
-
-
-
-
+//    异步远程调用
+    @Test
+    public  void  asynRemoteRpcTest(){
+        RRemoteService remoteService = client.getRemoteService();
+        DemoServiceAsyn asyncService = remoteService.get(DemoServiceAsyn.class);
+        RFuture<Object> rFuture = asyncService.invoke();
+//        取消异步调用
+        rFuture.cancel(true);
+    }
 
 
 

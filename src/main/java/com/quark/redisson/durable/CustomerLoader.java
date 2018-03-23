@@ -1,4 +1,4 @@
-package com.quark.redisson;
+package com.quark.redisson.durable;
 
 import org.redisson.api.map.MapLoader;
 
