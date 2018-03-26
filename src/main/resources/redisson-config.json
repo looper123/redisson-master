@@ -1,16 +1,7 @@
 //redisson connect to redis json config
 {
-        "clusterServersConfig":{
-        "nodeAddresses":[
-        "//127.0.0.1:7004",
-        "//127.0.0.1:7001",
-        "//127.0.0.1:7000"
-        ]
-        },
-        "threads":0,
+  "singleServerConfig":{
+        "address":"redis://192.168.194.130:6379"
+  }
 
-        "executorServiceThreads": 0,
-        "executorServiceWorkers": {"myExecutor1":3, "myExecutor2":5},
-//        识别redisson client端的 分布式监听服务
-        "redissonNodeInitializer": {"class":"org.mycompany.MyRedissonNodeInitializer"}
-        }
+}

@@ -27,10 +27,10 @@ import java.util.Map;
 @EnableCaching
 public class SpringCacheIntegrationFromConfig {
 
-//    @Value(value = "classpath:redisson-config.json")
+//    @Value(value = "classpath:redisson-node-config.json")
 //    private Resource jsonResource;
 //
-//    @Value(value = "classpath:redisson-config.yml")
+//    @Value(value = "classpath:redisson-node-config.yml")
 //    private Resource ymlResource;
 
     @Bean(destroyMethod="shutdown")
