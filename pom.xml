@@ -30,6 +30,13 @@
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 
+		<!--redisson 整合spring 必须-->
+		<!--在启动spring 容器时把redisson的实例、配置一起加载-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-actuator</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
@@ -37,7 +44,6 @@
 		</dependency>
 
 
-		<!-- https://mvnrepository.com/artifact/org.redisson/redisson -->
 		<dependency>
 			<groupId>org.redisson</groupId>
 			<artifactId>redisson</artifactId>

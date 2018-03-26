@@ -1,0 +1,13 @@
+#redisson node 单独节点运行方法
+java -jar redisson-all.jar config.json 或 java -jar redisson-all.jar config.yml（另外不要忘记添加-Xmx或-Xms之类的参数）
+
+#docker方式运行方法
+ 一 无现有redis环境
+  1 首先运行Redis： docker run -d --name redis-node redis
+  2 再运行Redisson Node： docker run -d --network container:redis-node -e JAVA_OPTS="<java-opts>" -v <path-to-config>:/opt/redisson-node/redisson.conf redisson/redisson-node
+<path-to-config> - Redisson Node的JSON或YAML配置文件路径 <java-opts> - JAVA虚拟机的运行参数
+
+ 二 有现有redis环境
+    运行Redisson Node： docker run -d -e JAVA_OPTS="<java-opts>" -v <path-to-config>:/opt/redisson-node/redisson.conf redisson/redisson-node
+    <path-to-config> - Redisson Node的JSON或YAML配置文件路径 <java-opts> - JAVA虚拟机的运行参数
+

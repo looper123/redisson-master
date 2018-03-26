@@ -1,64 +1,178 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <beans xmlns="http://www.springframework.org/schema/beans"
-       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:redisson="http://redisson.org/schema/redisson"
-       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://redisson.org/schema/redisson http://redisson.org/schema/redisson/redisson.xsd">
-
-
-    <redisson:client
-            id="redisson"
-            name="redisson1,redisson2"
-            threads="0"
-            netty-threads="0"
-            codec-ref="myCodec"
-            use-linux-native-epoll="false"
-            redisson-reference-enabled="true"
-            codec-provider-ref="myCodecProvider"
-            resolver-provider-ref="myResolverProvider"
-            executor-ref="myExecutor"
-            event-loop-group-ref="myEventLoopGroup"
-    >
-        <!--
-        这里的name属性和qualifier子元素不能同时使用。
-
-        id和name的属性都可以被用来作为qualifier的备选值。
-        -->
-        <!--<qualifier value="redisson3"/>-->
-        <redisson:cluster-servers
-                idle-connection-timeout="10000"
-                ping-timeout="1000"
-                connect-timeout="10000"
-                timeout="3000"
-                retry-attempts="3"
-                retry-interval="1500"
-                reconnection-timeout="3000"
-                failed-attempts="3"
-                password="do_not_use_if_it_is_not_set"
-                subscriptions-per-connection="5"
-                client-name="none"
-                load-balancer-ref="myLoadBalancer"
-                subscription-connection-minimum-idle-size="1"
-                subscription-connection-pool-size="50"
-                slave-connection-minimum-idle-size="10"
-                slave-connection-pool-size="64"
-                master-connection-minimum-idle-size="10"
-                master-connection-pool-size="64"
-                read-mode="SLAVE"
-                subscription-mode="SLAVE"
-                scan-interval="1000"
-        >
-            <redisson:node-address value="redis://127.0.0.1:6379" />
-            <redisson:node-address value="redis://127.0.0.1:6380" />
-            <redisson:node-address value="redis://127.0.0.1:6381" />
-        </redisson:cluster-servers>
-    </redisson:client>
-
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:redisson="http://redisson.org/schema/redisson"
+       xsi:schemaLocation="
+       http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/context
+       http://www.springframework.org/schema/context/spring-context.xsd
+       http://redisson.org/schema/redisson
+       http://redisson.org/schema/redisson/redisson.xsd
+">
     <!-- 最基本配置 -->
     <redisson:client>
-        <redisson:cluster-servers>
-            <redisson:node-address value="redis://127.0.0.1:6379" />
-            <redisson:node-address value="redis://127.0.0.1:6380" />
-            <redisson:node-address value="redis://127.0.0.1:6381" />
-        </redisson:cluster-servers>
+        <!-- 默认地址是 127.0.0.1:6379 -->
+        <redisson:single-server  address="redis://192.168.194.130:6379"/>
+    </redisson:client>
+    <!-- 或者 -->
+    <redisson:client>
+        <redisson:single-server address="${redisAddress}"/>
     </redisson:client>
 
+
+    <!--redisson client 实例-->
+    <!--name属性中 多个由英文逗号分开的值是作为这个bean的化名的方式来解析的，
+    它们在自动依赖注入时也会被用来作为qualifier的备选值使用。-->
+    <redisson:client id="myRedisson1" name="redisson1,redisson2" >
+        <!--qualifier标签 可以用来指定它的qualifier备选值  但是不能和name共存-->
+        <!--<qualifier value="qualifiedName"/>-->
+        <redisson:single-server address="192.168.194.130:6379" client-name="1"/>
+        <!--redisson提供的对象和服务也可以在内部申明-->
+        <redisson:map id="map1" key="sample_map"/>
+        <!-- 获取redis中保存的分布式服务（非远程）  相当于
+        RExecutorService executorService = client.getExecutorService("myExecutor");-->
+        <redisson:executor-service
+                id="executorService1"
+                service="myExecutor"/>
+    </redisson:client>
+    <!-- 一个应用需要连接多个redis 需要同时存在多个redisson实例 -->
+    <redisson:client id="myRedisson2" name="redisson3,redisson4">
+        <redisson:single-server address="192.168.194.130:6380" client-name="2"/>
+    </redisson:client>
+
+
+    <!-- 在外部申明redisson提供的对象和服务-->
+    <!-- 所有在外部申明比在内部多了一个 redisson-ref="myRedisson"  用来关联具体的redisson实例-->
+    <!--<redisson:map id="map1" key="map" redisson-ref="myRedisson"/>-->
+    <!--<redisson:executor-service-->
+            <!--id="executorService"-->
+            <!--service="myExecutor"-->
+            <!--redisson-ref="myRedisson"/>-->
+    <!--分布式远程服务-->
+    <redisson:remote-service
+            id="remoteService1"
+            service="remoteServiceName"
+            redisson-ref="myRedisson">
+        <!--  服务方 注册服务  -->
+        <redisson:rpc-server
+                api-class="com.quark.redisson.remote.service.DemoService"
+                bean="demoService"/>
+        <!-- 消费方 获取代理后的服务对象 -->
+        <redisson:rpc-client
+                id="client1"
+                api-class="com.quark.redisson.remote.service.DemoService">
+            <redisson:remote-invocation-options>
+                <redisson:remote-ack within="1" time-unit="SECONDS"/>
+                <redisson:remote-result within="1" time-unit="SECONDS"/>
+            </redisson:remote-invocation-options>
+        </redisson:rpc-client>
+    </redisson:remote-service>
+    <!-- 服务对象 -->
+    <bean id="demoService" class="com.quark.redisson.remote.service.impl.DemoServiceImpl"/>
+
+
+    <!--分布式实时对象  可以同时被位于不同jvm的线程所引用-->
+    <redisson:live-object-service
+            id="live-object-service-ext"
+            redisson-ref="myRedisson">
+        <redisson:live-object-registration  class="com.quark.redisson.entity.DistributeEntity"/>
+        <!-- 获取代理后的实例 -->
+        <redisson:live-object
+                id="liveObject"
+                object-id="testLiveObjectId"
+                class="com.quark.redisson.entity.DistributeEntity"/>
+    </redisson:live-object-service>
+
+
+
+    <!--redisson xml中所有支持的对象和服务范例-->
+    <redisson:client>
+        <redisson:single-server address="127.0.0.1:6379"/>
+        <redisson:binary-stream id="binary-stream" key="binary-stream"/>
+        <redisson:geo id="geo" key="geo"/>
+        <redisson:set-cache id="set-cache" key="set-cache"/>
+        <redisson:map-cache id="map-cache" key="map-cache"/>
+        <redisson:bucket id="bucket" key="bucket"/>
+        <redisson:buckets id="buckets"/>
+        <redisson:hyper-log-log id="hyper-log-log" key="hyper-log-log"/>
+        <redisson:list id="list" key="list"/>
+        <redisson:list-multimap id="list-multimap" key="list-multimap"/>
+        <redisson:list-multimap-cache id="list-multimap-cache" key="list-multimap-cache"/>
+        <redisson:local-cached-map id="local-cached-map" key="local-cached-map">
+            <redisson:local-cached-map-options id="local-options" eviction-policy="LRU" time-to-live="1" time-to-live-unit="SECONDS"/>
+        </redisson:local-cached-map>
+        <redisson:map id="map" key="map"/>
+        <redisson:set-multimap id="set-multimap" key="set-multimap"/>
+        <redisson:set-multimap-cache id="set-multimap-cache" key="set-multimap-cache"/>
+        <redisson:semaphore id="semaphore" key="semaphore"/>
+        <redisson:permit-expirable-semaphore id="permit-expirable-semaphore" key="permit-expirable-semaphore"/>
+        <redisson:lock id="lock" key="lock"/>
+        <redisson:fair-lock id="fair-lock" key="fair-lock"/>
+        <redisson:read-write-lock id="read-write-lock" key="read-write-lock">
+            <redisson:read-lock id="read-lock"/>
+            <redisson:write-lock id="write-lock"/>
+        </redisson:read-write-lock>
+        <redisson:multi-lock id="multi-lock">
+            <ref bean="lock"/>
+            <redisson:lock id="lock-1" key="lock-1"/>
+            <redisson:fair-lock id="fair-lock-1" key="fair-lock-1"/>
+            <redisson:write-lock id="write-lock-1" read-write-lock-ref="read-write-lock"/>
+            <redisson:read-lock id="read-lock-1" read-write-lock-ref="read-write-lock"/>
+        </redisson:multi-lock>
+        <redisson:red-lock id="red-lock">
+            <ref bean="lock"/>
+            <redisson:lock id="lock-2" key="lock-2"/>
+            <redisson:fair-lock id="fair-lock-2" key="fair-lock-2"/>
+            <redisson:write-lock id="write-lock-2" read-write-lock-ref="read-write-lock"/>
+            <redisson:read-lock id="read-lock-2" read-write-lock-ref="read-write-lock"/>
+        </redisson:red-lock>
+        <redisson:set id="set" key="set"/>
+        <redisson:sorted-set id="sorted-set" key="sorted-set"/>
+        <redisson:scored-sorted-set id="scored-sorted-set" key="scored-sorted-set"/>
+        <redisson:lex-sorted-set id="lex-sorted-set" key="lex-sorted-set"/>
+        <redisson:topic id="topic" topic="topic"/>
+        <redisson:pattern-topic id="pattern-topic" pattern="pattern-topic"/>
+        <redisson:blocking-fair-queue id="blocking-fair-queue" key="blocking-fair-queue"/>
+        <redisson:queue id="queue" key="queue"/>
+        <redisson:delayed-queue id="delayed-queue" destination-queue-ref="queue"/>
+        <redisson:priority-queue id="priority-queue" key="priority-queue"/>
+        <redisson:priority-deque id="priority-deque" key="priority-deque"/>
+        <redisson:blocking-queue id="blocking-queue" key="blocking-queue"/>
+        <redisson:bounded-blocking-queue id="bounded-blocking-queue" key="bounded-blocking-queue"/>
+        <redisson:deque id="deque" key="deque"/>
+        <redisson:blocking-deque id="blocking-deque" key="blocking-deque"/>
+        <redisson:atomic-long id="atomic-long" key="atomic-long"/>
+        <redisson:atomic-double id="atomic-double" key="atomic-double"/>
+        <redisson:count-down-latch id="count-down-latch" key="count-down-latch"/>
+        <redisson:bit-set id="bit-set" key="bit-set"/>
+        <redisson:bloom-filter id="bloom-filter" key="bloom-filter"/>
+        <redisson:script id="script"/>
+        <redisson:executor-service id="executor-service" service="executor-service"/>
+        <redisson:remote-service id="remote-service" service="remote-service">
+            <redisson:rpc-server api-class="com.example.MyTestService" bean="myServiceBean"/>
+            <redisson:rpc-client id="rpc-client" api-class="com.example.MyTestService">
+                <redisson:remote-invocation-options id="options">
+                    <!-- 以下二选一 -->
+                    <!--<redisson:remote-no-ack/>-->
+                    <redisson:remote-ack within="1" time-unit="SECONDS"/>
+                    <!-- 以下二选一 -->
+                    <!--<redisson:remote-no-result/>-->
+                    <redisson:remote-result within="1" time-unit="SECONDS"/>
+                </redisson:remote-invocation-options>
+            </redisson:rpc-client>
+        </redisson:remote-service>
+        <redisson:keys id="keys"/>
+        <redisson:live-object-service id="live-object-service">
+            <redisson:live-object-registration  class="com.example.MyEntity" />
+            <redisson:live-object id="live-object" object-id="live-object" class="com.example.MyEntity" />
+        </redisson:live-object-service>
+    </redisson:client>
+
+
+    <!-- 底层Redis客户端最基本配置-->
+    <redisson:redis
+            address="redis://192.168.194.130:6379"
+            connect-timeout="10000"
+            command-timeout="10000"/>
 </beans>

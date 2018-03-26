@@ -3,13 +3,15 @@ package com.quark.redisson.task;
 import org.redisson.api.RMap;
 import org.redisson.api.RedissonClient;
 import org.redisson.api.annotation.RInject;
+import org.springframework.stereotype.Component;
 
 import java.util.concurrent.Callable;
 
 /**
  * Created by ZhenpengLu on 2018/3/23.
- * callable 分布式任务
+ * callable 分布式服务
  */
+@Component(value = "callableTask")
 public class CallableTask implements Callable<Object> {
 
     @RInject

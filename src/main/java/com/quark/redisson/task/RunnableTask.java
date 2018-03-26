@@ -3,11 +3,13 @@ package com.quark.redisson.task;
 import org.redisson.api.RAtomicLong;
 import org.redisson.api.RedissonClient;
 import org.redisson.api.annotation.RInject;
+import org.springframework.stereotype.Component;
 
 /**
  * Created by ZhenpengLu on 2018/3/23.
  * 分布式runnable 服务
  */
+@Component(value = "runnableTask")
 public class RunnableTask implements Runnable {
 
     @RInject

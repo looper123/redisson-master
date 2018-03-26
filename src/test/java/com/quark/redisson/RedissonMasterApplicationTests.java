@@ -13,12 +13,14 @@ import com.quark.redisson.remote.service.DemoServiceAsyn;
 import com.quark.redisson.remote.service.impl.DemoServiceImpl;
 import com.quark.redisson.task.CallableTask;
 import com.quark.redisson.task.RunnableTask;
+import io.netty.channel.nio.NioEventLoopGroup;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.redisson.Redisson;
 import org.redisson.RedissonMultiLock;
+import org.redisson.RedissonNode;
 import org.redisson.RedissonRedLock;
 import org.redisson.api.*;
 import org.redisson.api.listener.MessageListener;
@@ -29,18 +31,29 @@ import org.redisson.api.map.event.EntryRemovedListener;
 import org.redisson.api.map.event.EntryUpdatedListener;
 import org.redisson.api.mapreduce.RCollectionMapReduce;
 import org.redisson.api.mapreduce.RMapReduce;
+import org.redisson.client.RedisClient;
+import org.redisson.client.RedisClientConfig;
+import org.redisson.client.RedisConnection;
+import org.redisson.client.codec.StringCodec;
+import org.redisson.client.protocol.RedisCommands;
 import org.redisson.config.Config;
+import org.redisson.config.RedissonNodeConfig;
 import org.redisson.config.TransportMode;
+import org.redisson.connection.ConnectionListener;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.rule.OutputCapture;
+import org.springframework.core.io.Resource;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -56,6 +69,12 @@ import java.util.concurrent.TimeUnit;
 public class RedissonMasterApplicationTests {
 
     private Config config;
+
+    @Value(value="classpath:config.json")
+    private Resource jsonResource;
+
+    @Value(value="classpath:config.yml")
+    private Resource ymlResource;
 
     private RedissonClient client;
     private RedissonClient client2;
@@ -113,10 +132,10 @@ public class RedissonMasterApplicationTests {
     //redisson 读取配置的方式
     @Test
     public void redissonConfigReadTest() throws IOException {
-//		从.json文件中读取配置
-        Config config_json = config.fromJSON(new File("H:\\idea workspace\\redisson-master\\src\\main\\resources\\redisson.json"));
+//		从.json文件中读取配置 支持流 、path、url。。。读取方式
+        Config config_json = config.fromJSON(jsonResource.getInputStream());
 //		从.yml文件中读取配置
-        Config config_yml = config.fromYAML(new File("H:\\idea workspace\\redisson-master\\src\\main\\resources\\redisson.yml"));
+        Config config_yml = config.fromYAML(ymlResource.getInputStream());
     }
 
 
@@ -790,8 +809,8 @@ public class RedissonMasterApplicationTests {
     }
 
 
-//    --------------------分布式服务---------------------
-//    以jvm作为服务器
+//    --------------------分布式服务  ---------------------
+//需要和redisson node 一起使用  由redisson的客户端来发布服务  redisson node来接收、执行服务
     //   基于redisson的远程rpc
     //  服务端（服务提供者）
     /**
@@ -945,7 +964,7 @@ public class RedissonMasterApplicationTests {
 
 
 //    分布式执行服务  （保证服务执行的唯一性）
-//    Redisson独立节点不要求任务的类在类路径里。他们会自动被Redisson独立节点的ClassLoader加载。
+//    Redisson独立节点不要求任务的类在类路径里。他们会自动被Redisson独立节点（redisson node）的ClassLoader加载。
 //     因此每次执行一个新任务时，不需要重启Redisson独立节点。
 //    callableTask
     @Test
@@ -1041,6 +1060,140 @@ public class RedissonMasterApplicationTests {
         // 统计字数
         Integer totalWordsAmount = mapReduce.execute(new WordCollator());
     }
+
+
+//   --------------------额外功能--------------------
+    @Test
+    public  void nodeOperationTest(){
+        NodesGroup<Node> nodesGroup = client.getNodesGroup();
+        nodesGroup.addConnectionListener(new ConnectionListener() {
+            @Override
+            public void onConnect(InetSocketAddress addr) {
+                //节点连接成功
+            }
+
+            @Override
+            public void onDisconnect(InetSocketAddress addr) {
+                //节点断开
+            }
+        });
+//        获取所有节点
+        Collection<Node> nodes = nodesGroup.getNodes();
+        for (Node node: nodes) {
+//            循环ping
+            node.ping();
+        }
+//        pingall
+        nodesGroup.pingAll();
+    }
+
+
+//    复杂多维对象结构和对象引用支持
+    @Test
+    public  void complexInstructionTest(){
+        RMap<RSet<RList>, RList<RMap>> complexMap = client.getMap("complex_map");
+        RList<RMap> complexList = client.getList("complex_list");
+        RSet<RList> complexSet = client.getSet("complex_set");
+//        这里map中保存的元素发生了改变，我们不需要更新元素来使map保持最新，因为map对象所记录不是序列化后的值而是对保存
+//        元素地址的引用
+        complexMap.put(complexSet,complexList);
+        complexSet.add(complexList);
+        complexList.add(complexMap);
+    }
+
+
+//      命令的批量执行  (redis 管道的应用)
+    @Test
+    public  void batchExecutorCommandTest(){
+        RBatch batch = client.createBatch();
+        batch.getMap("sample_batch_map").putAsync("batch_key","batch_value1");
+        batch.getMap("sample_batch_map").putAsync("batch_key","batch_value2");
+        batch.getAtomicLong("counter").incrementAndGetAsync();
+        batch.getAtomicLong("counter").incrementAndGetAsync();
+//        原子化批量执行任务（事务）
+        batch.atomic();
+//        告知redis不用返回结果 (减少网络用量)
+        batch.skipResult();
+//        把写入操作同步到从节点
+        batch.syncSlaves(2,1,TimeUnit.SECONDS);
+//        处理结果超时时间
+        batch.timeout(2, TimeUnit.SECONDS);
+        // 命令重试等待间隔时间为2秒钟
+        batch.retryInterval(2, TimeUnit.SECONDS);
+// 命令重试次数，仅适用于未发送成功的命令
+        batch.retryAttempts(4);
+//        每个节点返回结果都会汇总到最终列表里
+        BatchResult res = batch.execute();
+// 或者
+        Future<BatchResult<?>> asyncRes = batch.executeAsync();
+    }
+
+//    脚本执T行
+    @Test
+    public  void scriptExecutorTest(){
+        client.getBucket("foo").set("bar");
+        Object result = client.getScript().eval(RScript.Mode.READ_ONLY, "return redis.call('get', 'foo')", RScript.ReturnType.VALUE);
+
+//        通过预存的脚本进行同样的操作  把上面的方法 分步执行
+        RScript script = client.getScript();
+//        first 把脚本保存到redis所有主节点
+        String res = script.scriptLoad("return redis.call('get', 'foo')");
+        // 返回值 res == 282297a0228f48cd3fc6a55de6316f31422f5d17
+        // 再通过SHA值调用脚本
+        Future<Object> r1 = client.getScript().evalShaAsync(RScript.Mode.READ_ONLY,
+                "282297a0228f48cd3fc6a55de6316f31422f5d17",
+                RScript.ReturnType.VALUE, Collections.emptyList());
+    }
+
+//    底层redis客户端
+//    redisson 底层采用了高性能异步非阻塞java客户端  同时支持异步和同步两种通信方式
+//    可以直接调用底层redis客户端来实现 redisson没有提供的命令
+    @Test
+    public  void  groundRedisClientTest(){
+        NioEventLoopGroup group = new NioEventLoopGroup();
+        RedisClientConfig config = new RedisClientConfig();
+        config.setAddress("redis://localhost:6379") // 或者用rediss://使用加密连接
+                .setPassword("myPassword")
+                .setDatabase(0)
+                .setClientName("myClient")
+                .setGroup(group);
+        RedisClient client = RedisClient.create(config);
+        RedisConnection conn = client.connect();
+// 或
+        RFuture<RedisConnection> connFuture = client.connectAsync();
+        conn.sync(StringCodec.INSTANCE, RedisCommands.SET, "test", 0);
+// 或
+        conn.async(StringCodec.INSTANCE, RedisCommands.GET, "test");
+        conn.closeAsync();
+// 或
+        conn.closeAsync();
+        client.shutdown();
+// 或
+        client.shutdownAsync();
+    }
+
+//-------------------------redisson node  --------------------
+//     redison node 以嵌入式方法运行在其他应用中
+    @Test
+    public  void embeddedRunningRedissonNodeTest() throws IOException {
+        Config redissonNodeConfig = new Config();
+        // Redisson程序化配置代码
+        Config config_json =  redissonNodeConfig.fromJSON(new File("H:\\idea workspace\\redisson-master\\src\\main\\resources\\config.json"));;
+        Config config_yml =  redissonNodeConfig.fromJSON(new File("H:\\idea workspace\\redisson-master\\src\\main\\resources\\config.yml"));;
+// Redisson Node 程序化配置方法
+        RedissonNodeConfig nodeConfig = new RedissonNodeConfig(config_yml);
+        Map<String, Integer> workers = new HashMap<String, Integer>();
+        workers.put("test", 1);
+        nodeConfig.setExecutorServiceWorkers(workers);
+// 创建一个Redisson Node实例
+        RedissonNode node = RedissonNode.create(nodeConfig);
+// 或者通过指定的Redisson实例创建Redisson Node实例
+        RedissonNode node_assign = RedissonNode.create(nodeConfig, client);
+        node.start();
+        node.shutdown();
+    }
+
+
 
 
 
