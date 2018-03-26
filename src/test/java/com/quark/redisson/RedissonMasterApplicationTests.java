@@ -70,10 +70,10 @@ public class RedissonMasterApplicationTests {
 
     private Config config;
 
-    @Value(value="classpath:config.json")
+    @Value(value="classpath:redisson-config.json")
     private Resource jsonResource;
 
-    @Value(value="classpath:config.yml")
+    @Value(value="classpath:redisson-config.yml")
     private Resource ymlResource;
 
     private RedissonClient client;
@@ -1178,8 +1178,8 @@ public class RedissonMasterApplicationTests {
     public  void embeddedRunningRedissonNodeTest() throws IOException {
         Config redissonNodeConfig = new Config();
         // Redisson程序化配置代码
-        Config config_json =  redissonNodeConfig.fromJSON(new File("H:\\idea workspace\\redisson-master\\src\\main\\resources\\config.json"));;
-        Config config_yml =  redissonNodeConfig.fromJSON(new File("H:\\idea workspace\\redisson-master\\src\\main\\resources\\config.yml"));;
+        Config config_json =  redissonNodeConfig.fromJSON(new File("H:\\idea workspace\\redisson-master\\src\\main\\resources\\redisson-config.json"));;
+        Config config_yml =  redissonNodeConfig.fromJSON(new File("H:\\idea workspace\\redisson-master\\src\\main\\resources\\redisson-config.yml"));;
 // Redisson Node 程序化配置方法
         RedissonNodeConfig nodeConfig = new RedissonNodeConfig(config_yml);
         Map<String, Integer> workers = new HashMap<String, Integer>();

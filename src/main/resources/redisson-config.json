@@ -1,4 +1,4 @@
-//redisson node json config
+//redisson connect to redis json config
 {
         "clusterServersConfig":{
         "nodeAddresses":[

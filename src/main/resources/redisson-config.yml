@@ -1,4 +1,4 @@
-#redisson node yml config
+#redisson connect to redis yml config
 {
    "clusterServersConfig":{
       "nodeAddresses":[

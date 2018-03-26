@@ -19,26 +19,31 @@ import java.util.Map;
 
 /**
  * Created by ZhenpengLu on 2018/3/26.
- * redisson 实现了redis 和spring的无缝对接
+ * redisson  按照spring cache 实现了redis 和spring 的无缝对接
+ * 支持直接从json、yml文件中读取配置
  */
 @Configuration
 @ComponentScan
 @EnableCaching
-public class SpringIntegration {
+public class SpringCacheIntegrationFromConfig {
+
+//    @Value(value = "classpath:redisson-config.json")
+//    private Resource jsonResource;
+//
+//    @Value(value = "classpath:redisson-config.yml")
+//    private Resource ymlResource;
+
     @Bean(destroyMethod="shutdown")
-    RedissonClient redisson() throws IOException {
-        Config config = new Config();
-        config.useClusterServers()
-                .addNodeAddress("192.168.194.130:7004", "192.168.194.130:7001");
+//        直接从json、yml文件中读取配置
+        RedissonClient redisson(@Value("classpath:/redisson-config.json") Resource jsonConfig) throws IOException {
+        Config config = Config.fromJSON(jsonConfig.getInputStream());
         return Redisson.create(config);
     }
 
     @Bean
     CacheManager cacheManager(RedissonClient redissonClient) {
-        Map<String, CacheConfig> config = new HashMap<String, CacheConfig>();
-        // 创建一个名称为"testMap"的缓存，过期时间ttl为24分钟，同时最长空闲时maxIdleTime为12分钟。
-        config.put("testMap", new CacheConfig(24*60*1000, 12*60*1000));
-        return new RedissonSpringCacheManager(redissonClient, config);
+//        直接从json、yml文件中读取配置
+        return new RedissonSpringCacheManager(redissonClient, "classpath:/redisson-config.json");
     }
 
 }
